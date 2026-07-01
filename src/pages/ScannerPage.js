@@ -21,20 +21,23 @@ export default function ScannerPage() {
     initModel, startScanning, stopScanning, modelLoading, modelProgress, modelError, canvasRef,
   } = useDetection(videoRef, videoDimensions);
 
-  const [initStarted, setInitStarted] = useState(false);
   const [showSafe, setShowSafe] = useState(false);
   const safeTimeoutRef = useRef(null);
+  const cameraStartedRef = useRef(false);
 
   useEffect(() => {
     requestNotificationPermission();
   }, []);
 
   useEffect(() => {
-    if (!initStarted) {
-      setInitStarted(true);
+    if (!cameraStartedRef.current) {
+      cameraStartedRef.current = true;
       startCamera('environment');
     }
-  }, [initStarted, startCamera]);
+    return () => {
+      cameraStartedRef.current = false;
+    };
+  }, [startCamera]);
 
   useEffect(() => {
     if (camStatus === 'ready' && !modelLoading && !scannerState.modelStatus.includes('loaded')) {

@@ -1,29 +1,14 @@
-const CACHE = 'security-scanner-v1';
-const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/favicon.svg',
-  '/icons/icon-192.svg',
-  '/icons/icon-512.svg',
-  '/icons/icon.svg',
-];
+const CACHE = 'security-scanner-v2';
 
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
-    }).then(() => self.skipWaiting())
-  );
+self.addEventListener('install', () => {
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))
-      );
-    }).then(() => self.clients.claim())
+    caches.keys().then((keys) =>
+      Promise.all(keys.map((k) => k !== CACHE ? caches.delete(k) : null))
+    ).then(() => self.clients.claim())
   );
 });
 
@@ -33,39 +18,42 @@ self.addEventListener('fetch', (event) => {
 
   if (url.origin !== self.location.origin) return;
 
-  if (url.pathname.startsWith('/static/')) {
+  if (request.mode === 'navigate') {
     event.respondWith(
-      caches.open(CACHE).then(async (cache) => {
-        const cached = await cache.match(request);
-        if (cached) return cached;
-        try {
-          const response = await fetch(request);
-          if (response.ok) cache.put(request, response.clone());
-          return response;
-        } catch {
-          return cached;
-        }
-      })
+      fetch(request).catch(() => caches.match('/index.html'))
     );
     return;
   }
 
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      const fetchPromise = fetch(request).then((response) => {
-        if (response && response.ok) {
-          const clone = response.clone();
-          caches.open(CACHE).then((cache) => cache.put(request, clone));
-        }
-        return response;
-      }).catch(() => cached);
-      return cached || fetchPromise;
-    })
-  );
+  if (url.pathname.startsWith('/static/') || url.pathname.match(/\.(js|css|svg|png|ico|woff2?)$/)) {
+    event.respondWith(
+      caches.open(CACHE).then((cache) =>
+        cache.match(request).then((cached) => {
+          if (cached) return cached;
+          return fetch(request).then((response) => {
+            if (response.ok) cache.put(request, response.clone());
+            return response;
+          });
+        })
+      )
+    );
+    return;
+  }
+
+  if (url.pathname.startsWith('/icons/') || url.pathname === '/manifest.json' || url.pathname === '/favicon.svg') {
+    event.respondWith(
+      caches.open(CACHE).then((cache) =>
+        cache.match(request).then((cached) => cached || fetch(request).then((r) => {
+          if (r.ok) cache.put(request, r.clone());
+          return r;
+        }))
+      )
+    );
+  }
 });
 
 self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
+  if (event.data?.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
 });

@@ -25,18 +25,21 @@ export default function useCamera() {
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play();
 
-        await new Promise((resolve) => {
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => resolve('timeout'), 3000);
+
           videoRef.current.onloadedmetadata = () => {
+            clearTimeout(timeout);
             setVideoDimensions({
               width: videoRef.current.videoWidth,
               height: videoRef.current.videoHeight,
             });
-            resolve();
+            resolve('metadata');
           };
         });
 
+        await videoRef.current.play();
         setStatus('ready');
       }
     } catch (err) {
